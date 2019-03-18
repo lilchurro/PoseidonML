@@ -37,6 +37,7 @@ class Model:
         self.stds = None
         self.feature_list = None
         self.model = model
+        self.algo = None
         self.model_type = model_type
         self.labels = labels
         self.sessions = None
@@ -387,13 +388,13 @@ class Model:
             'means': self.means.tolist(),
             'stds': self.stds.tolist(),
             'feature_list': self.feature_list,
-            'model_algo': self.get_algorithm(),
+            'algo': self.get_algorithm(),
             'labels': self.labels
         }
 
         if jsn:
-            with open(save_path+'.json', 'w') as handle:
-                json.dump(model_attributes, handle)
+            with open(save_path, 'w') as handle:
+                json.dump(model_attributes, handle, indent=3)
 
         else:
             with open(save_path, 'wb') as handle:
@@ -408,7 +409,7 @@ class Model:
         '''
 
         if jsn:
-            with open(load_path+'.json', 'r') as handle:
+            with open(load_path, 'r') as handle:
                 model_attributes = json.load(handle)
         else:
             with open(load_path, 'rb') as handle:
@@ -420,7 +421,7 @@ class Model:
         self.stds = np.asarray(model_attributes['stds'])
         self.feature_list = model_attributes['feature_list']
         if jsn:
-            self.model_algo = model_attributes['model_algo']
+            self.algo = model_attributes['algo']
         else:
             self.model = model_attributes['model']
         self.labels = model_attributes['labels']

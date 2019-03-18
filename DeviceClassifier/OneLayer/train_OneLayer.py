@@ -11,14 +11,19 @@ from poseidonml.Model import Model
 from sklearn.neural_network import MLPClassifier
 
 
+
+default_pcap_dir = '/pcaps'
+default_model_file = 'models/OneLayerModel.pkl'
+default_conf_file = 'opts/config.json'
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', '-c', default='opts/config.json',
+    parser.add_argument('--config', '-c', default=default_conf_file,
                         help='model\'s config file')
-    parser.add_argument('--pcaps', '-P', default='/pcaps',
+    parser.add_argument('--pcaps', '-P', default=default_pcap_dir,
                         help='pcap directory to train on (e.g., /pcaps)')
-    parser.add_argument('--save', '-w', default='models/OneLayerModel.pkl',
-                        help='path to save model (e.g., models/OneLayerModel.pkl)')
+    parser.add_argument('--save', '-w', default=default_model_file,
+                        help='path to save model (e.g., models/OneLayerModel.json)')
 
     args = parser.parse_args()
 
@@ -49,7 +54,7 @@ def main():
     # Train the model
     model.train(data_dir)
     # Save the model to the specified path
-    model.save(args.save)
+    model.save(args.save, jsn=True)
 
 if __name__ == '__main__':
     main()

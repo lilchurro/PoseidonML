@@ -10,6 +10,8 @@ from poseidonml.eval_SoSModel import eval_pcap
 from poseidonml.Model import Model
 from poseidonml.pcap_utils import clean_session_dict
 
+from sklearn.neural_network import MLPClassifier
+
 
 class OneLayerEval:
     """
@@ -31,6 +33,12 @@ class OneLayerEval:
         self.conf_labels = self.common.conf_labels
         self.rnn_size = self.common.rnn_size
         self.skip_rabbit = self.common.skip_rabbit
+
+    def verify(self, model, algo):
+        '''
+        Return false if algorithm from model file is different from what is expected.
+        '''
+        return algo in model.algo.keys() 
 
     def main(self):
         # path to pcap or directory to get update from
@@ -65,7 +73,7 @@ class OneLayerEval:
         if len(sys.argv) > 2:
             load_path = sys.argv[2]
         else:
-            load_path = '/models/OneLayerModel.pkl'
+            load_path = '/models/OneLayerModel.json'
 
         # Compute model hash
         with open(load_path, 'rb') as handle:
@@ -73,8 +81,13 @@ class OneLayerEval:
 
         model = Model(duration=None, hidden_size=None,
                       model_type='OneLayer')
-        model.load(load_path)
+        model.load(load_path, jsn=True)
         self.logger.debug('Loaded model from %s', load_path)
+        if not self.verify(model, 'MLPClassifier'):
+            self.logger.error('The loaded model did not match the expected algorithm for this eval.')
+            return
+        model.model = MLPClassifier()
+        model.model.set_params(**model.algo['MLPClassifier'])
 
         for pcap in pcaps:
             self.logger.info('Processing {0}...'.format(pcap))
