@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import pickle as pickle
@@ -191,6 +192,19 @@ class Model:
         self.logger.info('F1 score:')
         self.logger.info(f1_score(y_test_aug, predictions, average='weighted'))
 
+    def get_algorithm(self):
+        '''
+        Returns a dictionary of functions and their parameters used to generate the model.
+
+        Returns:
+            model: dictionary (e.g., { 'algorithm': 'parameters' })
+        '''
+
+        params =  self.model.get_params()
+        fname_index = str(self.model).find('(')
+
+        return { str(self.model)[:fname_index] : params }
+
     def predict(self, filepath, source_ip=None):
         '''
         Read a capture file from the specified path and make a prediction
@@ -359,7 +373,7 @@ class Model:
 
         return prediction
 
-    def save(self, save_path):
+    def save(self, save_path, jsn=True):
         '''
         Saves the model to the specified file path
 
@@ -370,17 +384,22 @@ class Model:
         model_attributes = {
             'duration': self.duration,
             'hidden_size': self.hidden_size,
-            'means': self.means,
-            'stds': self.stds,
+            'means': self.means.tolist(),
+            'stds': self.stds.tolist(),
             'feature_list': self.feature_list,
-            'model': self.model,
+            'model_algo': self.get_algorithm(),
             'labels': self.labels
         }
 
-        with open(save_path, 'wb') as handle:
-            pickle.dump(model_attributes, handle)
+        if jsn:
+            with open(save_path+'.json', 'w') as handle:
+                json.dump(model_attributes, handle)
 
-    def load(self, load_path):
+        else:
+            with open(save_path, 'wb') as handle:
+                pickle.dump(model_attributes, handle)
+
+    def load(self, load_path, jsn=False):
         '''
         Load the model parameters from the specified path.
 
@@ -388,13 +407,20 @@ class Model:
             load_path: Path to load the model parameters from
         '''
 
-        with open(load_path, 'rb') as handle:
-            model_attributes = pickle.load(handle)
+        if jsn:
+            with open(load_path+'.json', 'r') as handle:
+                model_attributes = json.load(handle)
+        else:
+            with open(load_path, 'rb') as handle:
+                model_attributes = pickle.load(handle)
 
         self.duration = model_attributes['duration']
         self.hidden_size = model_attributes['hidden_size']
-        self.means = model_attributes['means']
-        self.stds = model_attributes['stds']
+        self.means = np.asarray(model_attributes['means'])
+        self.stds = np.asarray(model_attributes['stds'])
         self.feature_list = model_attributes['feature_list']
-        self.model = model_attributes['model']
+        if jsn:
+            self.model_algo = model_attributes['model_algo']
+        else:
+            self.model = model_attributes['model']
         self.labels = model_attributes['labels']
