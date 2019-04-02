@@ -3,7 +3,7 @@ from shutil import copyfile
 
 import numpy as np
 
-from utils.Model import Model
+from networkml.utils.model import Model
 
 model = Model(10, labels=['Unknown'])
 
@@ -18,10 +18,6 @@ def test_augment_data():
 def test_get_features():
     with open('tests/test.pcap', 'a'):
         os.utime('tests/test.pcap', None)
-    if not os.path.isfile('opts/config.json'):
-        os.makedirs('opts')
-        copyfile('DeviceClassifier/OneLayer/opts/config.json',
-                 'opts/config.json')
     model.get_features('tests/test.pcap')
 
 
