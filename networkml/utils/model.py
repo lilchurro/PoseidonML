@@ -16,6 +16,49 @@ from networkml.utils.training_utils import select_features
 logging.basicConfig(level=logging.INFO)
 
 
+def serialize_numpy(obj):
+    if isinstance(obj, list):
+        obj[:] = [ serialize_numpy(i) for i in obj ]
+    elif isinstance(obj, np.ndarray):
+        return { 'ndarray': obj.tolist(), 'dtype': str(obj.dtype) }
+    # else: it's fine; just return the object unmolested.
+    return obj
+
+def deserialize_numpy(obj):
+    if isinstance(obj, list):
+        obj[:] = [ deserialize_numpy(i) for i in obj ]
+    elif isinstance(obj, dict):
+        if 'ndarray' in obj:
+            return np.array(obj['ndarray'], dtype=obj['dtype'])
+    # else: it's not an abomination; just return the object.
+    return obj
+
+def get_model_json(m):
+    '''
+    Returns a dictionary the algorithm, parameters, and model's fit variables.
+
+    Returns:
+        model: dictionary (e.g., { 'algorithm': 'parameters' })
+    '''
+    model = {}
+
+    i_end = str(m).find('(')
+    model['algorithm'] = str(m)[:i_end]
+    model['params'] =  m.get_params()
+
+    # and now to deal with this heinous business.
+    attrs = [attr for attr in dir(m) if attr.endswith('_') and not attr.endswith('__')]
+    attributes = {a: getattr(m, a) for a in attrs}
+    for i in attributes.keys():
+        attributes[i] = serialize_numpy(attributes[i])
+    model['fit'] = attributes
+
+    return model
+
+def restore_json_model(m):
+    print("TODO: restore_json_model")
+    return m
+
 class Model:
     def __init__(self, duration, hidden_size=None, labels=None, model=None, model_type=None, threshold_time=None):
         '''
@@ -189,18 +232,6 @@ class Model:
         self.logger.info('F1 score:')
         self.logger.info(f1_score(y_test_aug, predictions, average='weighted'))
 
-    def get_algorithm(self):
-        '''
-        Returns a dictionary of functions and their parameters used to generate the model.
-
-        Returns:
-            model: dictionary (e.g., { 'algorithm': 'parameters' })
-        '''
-
-        params =  self.model.get_params()
-        fname_index = str(self.model).find('(')
-
-        return { str(self.model)[:fname_index] : params }
 
     def predict(self, filepath, source_ip=None):
         '''
@@ -384,7 +415,7 @@ class Model:
             'means': self.means.tolist(),
             'stds': self.stds.tolist(),
             'feature_list': self.feature_list,
-            'algo': self.get_algorithm(),
+            'model': self.get_model_json(),
             'labels': self.labels
         }
 
@@ -395,6 +426,7 @@ class Model:
         else:
             with open(save_path, 'wb') as handle:
                 pickle.dump(model_attributes, handle)
+
 
     def load(self, load_path, jsn=False):
         '''
