@@ -415,7 +415,7 @@ class Model:
             'means': self.means.tolist(),
             'stds': self.stds.tolist(),
             'feature_list': self.feature_list,
-            'model': self.get_model_json(),
+            'model': get_model_json(self.model),
             'labels': self.labels
         }
 
