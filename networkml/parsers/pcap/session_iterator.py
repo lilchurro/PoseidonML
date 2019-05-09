@@ -2,6 +2,7 @@
 Contains iterator class for generating training batches from a canned dataset
 """
 import pickle
+import sys
 
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -63,8 +64,6 @@ class BatchIterator:
         self.train_length = self.X_train.shape[0]
         self.validation_length = self.X_vala.shape[0]
         self.test_length = self.X_test.shape[0]
-        # self._normalize()
-
         self.perturb_types = perturb_types
 
     def _load_data(self):
@@ -162,18 +161,6 @@ class BatchIterator:
 
         return X, y
 
-    def _normalize(self):
-        means = np.mean(self.X_train, axis=(0, 1))
-        stds = np.std(self.X_train, axis=(0, 1))
-
-        means[0:5] = 0
-        means[11:] = 0
-        stds[0:5] = 1
-        stds[11:] = 1
-
-        self.means = means
-        self.stds = stds
-
     def _swap_ports(self, X):
         '''
         Swaps ports in a single session in the sequence
@@ -240,22 +227,24 @@ class BatchIterator:
 
         X_list = []
         L_list = []
-        for _ in range(batch_size):
-            idx = np.random.choice(range(length))
-            X_chosen = X[idx]
-            #X_chosen -= self.means
-            #X_chosen /= self.stds
+        try:
+            for _ in range(batch_size):
+                idx = np.random.choice(range(length))
+                X_chosen = X[idx]
 
-            if perturb is True:
-                perturbation = np.random.choice(self.perturb_types)
-                if perturbation == 'port swap':
-                    X_chosen = self._swap_ports(X_chosen)
-                if perturbation == 'direction swap':
-                    X_chosen = self._switch_host(X_chosen)
-                if perturbation == 'random data':
-                    X_chosen = self._random_data(X_chosen)
-            X_list.append(X_chosen)
-            L_list.append(L[idx])
+                if perturb is True:
+                    perturbation = np.random.choice(self.perturb_types)
+                    if perturbation == 'port swap':
+                        X_chosen = self._swap_ports(X_chosen)
+                    if perturbation == 'direction swap':
+                        X_chosen = self._switch_host(X_chosen)
+                    if perturbation == 'random data':
+                        X_chosen = self._random_data(X_chosen)
+                X_list.append(X_chosen)
+                L_list.append(L[idx])
+        except Exception as e:  # pragma: no cover
+            print('Error, failed because: {0}'.format(str(e)))
+            sys.exit(1)
 
         return np.stack(X_list), np.stack(L_list)
 

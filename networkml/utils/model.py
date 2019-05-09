@@ -1,7 +1,7 @@
-import json
 import logging
 import os
-import pickle as pickle
+import pickle
+import sys
 
 import numpy as np
 from sklearn.metrics import f1_score
@@ -15,49 +15,6 @@ from networkml.utils.training_utils import select_features
 
 logging.basicConfig(level=logging.INFO)
 
-
-def serialize_numpy(obj):
-    if isinstance(obj, list):
-        obj[:] = [ serialize_numpy(i) for i in obj ]
-    elif isinstance(obj, np.ndarray):
-        return { 'ndarray': obj.tolist(), 'dtype': str(obj.dtype) }
-    # else: it's fine; just return the object unmolested.
-    return obj
-
-def deserialize_numpy(obj):
-    if isinstance(obj, list):
-        obj[:] = [ deserialize_numpy(i) for i in obj ]
-    elif isinstance(obj, dict):
-        if 'ndarray' in obj:
-            return np.array(obj['ndarray'], dtype=obj['dtype'])
-    # else: it's not an abomination; just return the object.
-    return obj
-
-def get_model_json(m):
-    '''
-    Returns a dictionary the algorithm, parameters, and model's fit variables.
-
-    Returns:
-        model: dictionary (e.g., { 'algorithm': 'parameters' })
-    '''
-    model = {}
-
-    i_end = str(m).find('(')
-    model['algorithm'] = str(m)[:i_end]
-    model['params'] =  m.get_params()
-
-    # and now to deal with this heinous business.
-    attrs = [attr for attr in dir(m) if attr.endswith('_') and not attr.endswith('__')]
-    attributes = {a: getattr(m, a) for a in attrs}
-    for i in attributes.keys():
-        attributes[i] = serialize_numpy(attributes[i])
-    model['fit'] = attributes
-
-    return model
-
-def restore_json_model(m):
-    print("TODO: restore_json_model")
-    return m
 
 class Model:
     def __init__(self, duration, hidden_size=None, labels=None, model=None, model_type=None, threshold_time=None):
@@ -74,7 +31,6 @@ class Model:
         self.stds = None
         self.feature_list = None
         self.model = model
-        self.algo = None
         self.model_type = model_type
         self.labels = labels
         self.threshold_time = threshold_time
@@ -158,9 +114,13 @@ class Model:
         full_features = np.stack(X)
 
         # Mean normalize the features
-        full_features -= np.expand_dims(self.means, 0)
-        full_features /= np.expand_dims(self.stds, 0)
-        features = full_features[:, self.feature_list]
+        try:
+            full_features -= np.expand_dims(self.means, 0)
+            full_features /= np.expand_dims(self.stds, 0)
+            features = full_features[:, self.feature_list]
+        except Exception as e:  # pragma: no cover
+            self.logger.error('Failed because: {0}'.format(str(e)))
+            sys.exit(1)
         return features, source_ip, timestamps, other_ips, capture_source_ip
 
     def train(self, data_dir):
@@ -222,7 +182,11 @@ class Model:
         # Fit the one layer model to the augmented training data
         X_input = X_aug[:, self.feature_list]
 
-        self.model.fit(X_input, y_aug)
+        try:
+            self.model.fit(X_input, y_aug)
+        except Exception as e:  # pragma: no cover
+            self.logger.error('Failed because: {0}'.format(str(e)))
+            sys.exit(1)
 
         # Evaulate the model on the augmented test data
         X_test_input = X_test - np.expand_dims(self.means, 0)
@@ -231,7 +195,6 @@ class Model:
         predictions = self.model.predict(X_test_aug[:, self.feature_list])
         self.logger.info('F1 score:')
         self.logger.info(f1_score(y_test_aug, predictions, average='weighted'))
-
 
     def predict(self, filepath, source_ip=None):
         '''
@@ -358,7 +321,7 @@ class Model:
             try:
                 precision = tp/(tp + fp)
                 recall = tp/(tp + fn)
-            except Exception as e:
+            except Exception as e:  # pragma: no cover
                 self.logger.debug(
                     'Setting precision and recall to 0 because: {0}'.format(str(e)))
                 precision = 0
@@ -401,7 +364,7 @@ class Model:
 
         return prediction
 
-    def save(self, save_path, jsn=True):
+    def save(self, save_path):
         '''
         Saves the model to the specified file path
 
@@ -412,23 +375,17 @@ class Model:
         model_attributes = {
             'duration': self.duration,
             'hidden_size': self.hidden_size,
-            'means': self.means.tolist(),
-            'stds': self.stds.tolist(),
+            'means': self.means,
+            'stds': self.stds,
             'feature_list': self.feature_list,
-            'model': get_model_json(self.model),
+            'model': self.model,
             'labels': self.labels
         }
 
-        if jsn:
-            with open(save_path, 'w') as handle:
-                json.dump(model_attributes, handle, indent=3)
+        with open(save_path, 'wb') as handle:
+            pickle.dump(model_attributes, handle)
 
-        else:
-            with open(save_path, 'wb') as handle:
-                pickle.dump(model_attributes, handle)
-
-
-    def load(self, load_path, jsn=False):
+    def load(self, load_path):
         '''
         Load the model parameters from the specified path.
 
@@ -436,20 +393,34 @@ class Model:
             load_path: Path to load the model parameters from
         '''
 
-        if jsn:
-            with open(load_path, 'r') as handle:
-                model_attributes = json.load(handle)
-        else:
-            with open(load_path, 'rb') as handle:
-                model_attributes = pickle.load(handle)
+        with open(load_path, 'rb') as handle:
+            model_attributes = pickle.load(handle)
 
-        self.duration = model_attributes['duration']
-        self.hidden_size = model_attributes['hidden_size']
-        self.means = np.asarray(model_attributes['means'])
-        self.stds = np.asarray(model_attributes['stds'])
-        self.feature_list = model_attributes['feature_list']
-        if jsn:
-            self.algo = model_attributes['algo']
+        if 'duration' in model_attributes:
+            self.duration = model_attributes['duration']
         else:
+            self.duration = None
+        if 'hidden_size' in model_attributes:
+            self.hidden_size = model_attributes['hidden_size']
+        else:
+            self.hidden_size = None
+        if 'means' in model_attributes:
+            self.means = model_attributes['means']
+        else:
+            self.means = None
+        if 'stds' in model_attributes:
+            self.stds = model_attributes['stds']
+        else:
+            self.stds = None
+        if 'feature_list' in model_attributes:
+            self.feature_list = model_attributes['feature_list']
+        else:
+            self.feature_list = None
+        if 'model' in model_attributes:
             self.model = model_attributes['model']
-        self.labels = model_attributes['labels']
+        else:
+            self.model = None
+        if 'labels' in model_attributes:
+            self.labels = model_attributes['labels']
+        else:
+            self.labels = None

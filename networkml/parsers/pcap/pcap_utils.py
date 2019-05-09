@@ -193,7 +193,7 @@ def packet_size(packet):
     size = packet[1][32:36]
     try:
         size = int(size, 16)
-    except ValueError:
+    except ValueError:  # pragma: no cover
         size = 0
     return size
 
@@ -333,30 +333,6 @@ def clean_session_dict(sessions, source_address=None):
         cleaned_sessions = clean_dict(sessions, source_address)
 
     return cleaned_sessions, source_address
-
-
-def create_inputs(labels, session, seq_len, num_chars=16):
-    '''
-    Creates model inputs from a set of labels session
-    '''
-    L = np.zeros((1, len(labels)))
-    X = np.zeros((1, len(session), seq_len, num_chars))
-
-    # Create the packet input
-    hex_str = '0123456789abcdef'
-    for i, _ in enumerate(session):
-        raw_hex = session[i][1]
-        for j, c in enumerate(raw_hex):
-            if j < seq_len:
-                char_id = hex_str.index(c)
-                X[0, i, j, char_id] = 1
-
-    # Create the label input
-    classification = sorted(labels, key=lambda x: x[0])
-    class_array = [p for c, p in classification]
-    L[0] = np.asarray(class_array)
-
-    return X, L
 
 
 def get_length(packet):

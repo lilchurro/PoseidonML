@@ -4,9 +4,9 @@ Contains utilities required for parsing pcaps into model training features
 import json
 import logging
 import os
+import sys
 
 import numpy as np
-from sklearn.decomposition import PCA
 from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_val_score
@@ -104,7 +104,7 @@ def read_data(data_dir, duration=None, labels=None):
     try:
         if 'LOG_LEVEL' in os.environ and os.environ['LOG_LEVEL'] != '':
             logger.setLevel(os.environ['LOG_LEVEL'])
-    except Exception as e:
+    except Exception as e:  # pragma: no cover
         logger.error(
             'Unable to set logging level because: {0} defaulting to INFO.'.format(str(e)))
     X = []
@@ -151,7 +151,11 @@ def read_data(data_dir, duration=None, labels=None):
         new_labels = assigned_labels + \
             [l for l in labels if l not in assigned_labels]
 
-    return np.stack(X), np.stack(y), new_labels
+    try:
+        return np.stack(X), np.stack(y), new_labels
+    except Exception as e:  # pragma: no cover
+        logger.error('Failed because {0}'.format(str(e)))
+        sys.exit(1)
 
 
 def select_features(X, y):
@@ -172,7 +176,11 @@ def select_features(X, y):
     nb_trees = int(np.sqrt(X.shape[1]))
 
     selection_forest = ExtraTreesClassifier(nb_trees, random_state=3)
-    selection_forest.fit(X, y)
+    try:
+        selection_forest.fit(X, y)
+    except Exception as e:  # pragma: no cover
+        print('Error, failed because: {0}'.format(str(e)))
+        sys.exit(1)
 
     # Use a cross validated logistic regression to choose the importance
     # threshold at which a feature is included
@@ -204,59 +212,3 @@ def select_features(X, y):
 
     return [i for i, score in enumerate(selection_forest.feature_importances_)
             if score > threshold]
-
-
-def whiten_features(X):
-    '''
-    Fits the whitening transformation for the features X. and returns the
-    associated matrix.
-
-    Args:
-        X: numpy 2D array containing features
-
-    Returns:
-        whitening_transformation: Transformation to whiten features
-    '''
-
-    # Use PCA to create a whitening transformation fit to the training set
-    whitening_transformation = PCA(whiten=False)
-    whitening_transformation.fit(X)
-
-    return whitening_transformation
-
-
-def choose_regularization(X, y):
-    '''
-    Chooses a value for the regularization parameter using grid search and
-    cross validation.
-
-    Args:
-        X: numpy 2D array of model inputs
-        y: numpy 1D array of labels
-
-    Returns:
-        C: Selected value of the regulatization coefficient
-    '''
-
-    # Set up the grid search
-    max_C, step_size = 10, 5
-    best_score, C = 0, 0
-    trial_Cs = [i/step_size for i in range(1, max_C*step_size + 1)]
-
-    # Grid search with cross validation to get C
-    for trial in trial_Cs:
-        model = LogisticRegression(
-            C=trial,
-            multi_class='multinomial',
-            solver='newton-cg',
-            class_weight='balanced',
-            random_state=0,
-            max_iter=1000
-        )
-        scores = cross_val_score(model, X, y, cv=10)
-        score = scores.mean()
-        if score > best_score:
-            best_score = score,
-            C = trial
-
-    return C
